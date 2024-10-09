@@ -70,85 +70,155 @@ class AllProductsSection extends Component {
     productsList: [],
     isLoading: false,
     activeOptionId: sortbyOptions[0].optionId,
+    titleSearch: '',
+    category: '',
+    rating: '',
+    apiStatus: 'SUCCESS', // Added to manage failure status
   }
 
   componentDidMount() {
     this.getProducts()
   }
 
+  // Handling search input
+  onSearchInputChange = value => {
+    this.setState({titleSearch: value}, this.getProducts)
+  }
+
+  // Handling category change
+  changeCategory = id => {
+    const activeCategory = categoryOptions.find(
+      options => options.categoryId === id,
+    ).name
+    this.setState({category: activeCategory}, this.getProducts)
+  }
+
+  // Handling rating change
+  changerating = id => {
+    this.setState({rating: id}, this.getProducts)
+  }
+
+  // Fetch products with applied filters
   getProducts = async () => {
-    this.setState({
-      isLoading: true,
-    })
+    this.setState({isLoading: true})
     const jwtToken = Cookies.get('jwt_token')
 
-    // TODO: Update the code to get products with filters applied
+    const {activeOptionId, titleSearch, category, rating} = this.state
+    const apiUrl = `https://apis.ccbp.in/products?sort_by=${activeOptionId}&title_search=${titleSearch}&category=${category}&rating=${rating}`
 
-    const {activeOptionId} = this.state
-    const apiUrl = `https://apis.ccbp.in/products?sort_by=${activeOptionId}`
     const options = {
       headers: {
         Authorization: `Bearer ${jwtToken}`,
       },
       method: 'GET',
     }
-    const response = await fetch(apiUrl, options)
-    if (response.ok) {
-      const fetchedData = await response.json()
-      const updatedData = fetchedData.products.map(product => ({
-        title: product.title,
-        brand: product.brand,
-        price: product.price,
-        id: product.id,
-        imageUrl: product.image_url,
-        rating: product.rating,
-      }))
-      this.setState({
-        productsList: updatedData,
-        isLoading: false,
-      })
+
+    try {
+      const response = await fetch(apiUrl, options)
+      if (response.ok) {
+        const fetchedData = await response.json()
+        if (fetchedData.products.length === 0) {
+          this.setState({productsList: [], isLoading: false})
+        } else {
+          const updatedData = fetchedData.products.map(product => ({
+            title: product.title,
+            brand: product.brand,
+            price: product.price,
+            id: product.id,
+            imageUrl: product.image_url,
+            rating: product.rating,
+          }))
+          this.setState({
+            productsList: updatedData,
+            isLoading: false,
+            apiStatus: 'SUCCESS',
+          })
+        }
+      } else {
+        this.setState({isLoading: false, apiStatus: 'FAILURE'})
+      }
+    } catch (error) {
+      this.setState({isLoading: false, apiStatus: 'FAILURE'})
     }
   }
 
+  // Handling sort by change
   changeSortby = activeOptionId => {
     this.setState({activeOptionId}, this.getProducts)
   }
 
-  renderProductsList = () => {
-    const {productsList, activeOptionId} = this.state
-
-    // TODO: Add No Products View
-    return (
-      <div className="all-products-container">
-        <ProductsHeader
-          activeOptionId={activeOptionId}
-          sortbyOptions={sortbyOptions}
-          changeSortby={this.changeSortby}
-        />
-        <ul className="products-list">
-          {productsList.map(product => (
-            <ProductCard productData={product} key={product.id} />
-          ))}
-        </ul>
-      </div>
+  // Handling clear filters
+  clearFilters = () => {
+    this.setState(
+      {
+        title_search: '',
+        category: '',
+        rating: '',
+        activeOptionId: sortbyOptions[0].optionId,
+      },
+      this.getProducts,
     )
   }
 
+  // Rendering loader
   renderLoader = () => (
     <div className="products-loader-container">
       <Loader type="ThreeDots" color="#0b69ff" height="50" width="50" />
     </div>
   )
 
-  // TODO: Add failure view
+  // Rendering failure view
+  renderFailureView = () => (
+    <div className="failure-view">
+      <h1>Something went wrong</h1>
+      <button type="button" onClick={this.getProducts}>
+        Retry
+      </button>
+    </div>
+  )
 
+  // Rendering no products view
+  renderNoProductsView = () => (
+    <div className="no-products-view">
+      <h1>No Products Found</h1>
+    </div>
+  )
+
+  // Rendering products list
+  renderProductsList = () => {
+    const {productsList} = this.state
+
+    if (productsList.length === 0) {
+      return this.renderNoProductsView()
+    }
+
+    return (
+      <ul className="products-list">
+        {productsList.map(product => (
+          <ProductCard productData={product} key={product.id} />
+        ))}
+      </ul>
+    )
+  }
+
+  // Render method
   render() {
-    const {isLoading} = this.state
+    const {isLoading, apiStatus} = this.state
+
+    if (apiStatus === 'FAILURE') {
+      return this.renderFailureView()
+    }
 
     return (
       <div className="all-products-section">
-        {/* TODO: Update the below element */}
-        <FiltersGroup />
+        <FiltersGroup
+          categoryOptions={categoryOptions}
+          ratingsList={ratingsList}
+          changeCategory={this.changeCategory}
+          changerating={this.changerating}
+          onSearchInputChange={this.onSearchInputChange} // Pass to child component
+          clearFilters={this.clearFilters} // Pass clear filters function
+        />
 
         {isLoading ? this.renderLoader() : this.renderProductsList()}
       </div>
